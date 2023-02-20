@@ -42,8 +42,8 @@ class FEM
   ~FEM();									    //Class destructor
 
   //Define your 2D basis functions and derivatives
-  double basis_function(unsigned int node, double xi_1, double xi_2);
-  std::vector<double> basis_gradient(unsigned int node, double xi_1, double xi_2);
+  double basis_function(unsigned int node, ...);
+  std::vector<double> basis_gradient(unsigned int node ...);
 
   //Solution steps
   void generate_mesh(std::vector<unsigned int> numberOfElements);
@@ -117,6 +117,7 @@ FEM<dim>::~FEM (){
 template <int dim>
 double FEM<dim>::basis_function(unsigned int node, ...){
   va_list args;
+  va_start(args,node);
   unsigned int nnode = 2; // Number of nodes / dim. Same as order+1
 
   // Doesn't work the same for constant basis functions.
@@ -125,7 +126,6 @@ double FEM<dim>::basis_function(unsigned int node, ...){
 
   double value = 1.; //Store the value of the basis function in this variable
   
-  va_start(args, double);
 
   for(unsigned int i=0; i<dim; i++){
     
@@ -146,7 +146,6 @@ double FEM<dim>::basis_function(unsigned int node, ...){
     }
   }
   va_end(args);
-
   return value;
 }
 
@@ -154,23 +153,22 @@ double FEM<dim>::basis_function(unsigned int node, ...){
 //You need to calculate the value of the derivative of the specified basis function and order at the given quadrature pt.
 //Note that this is the derivative with respect to xi (not x)
 template <int dim>
-std::vector<double> FEM<dim>::basis_gradient(unsigned int node, ...){
+std::vector<double> FEM<dim>::basis_gradient(unsigned int node ...){
 
   std::vector<double> values(dim,0.0); //Store the value of the gradient of the basis function in this variable
 
   va_list args;
+  va_start(args,node);
 
-  int nnode = 2; // Number of nodes / dim. Same as order+1
+  unsigned int nnode = 2; // Number of nodes / dim. Same as order+1
 
   // Doesn't work the same for constant basis functions.
   if(nnode == 1)
     return values;
-  
-  va_start(args, double);
 
   dimLoop:for(int i=0; i<dim; i++){
     
-    int node_dim = node%nnode; // number of this node in the ith dimension
+    unsigned int node_dim = node%nnode; // number of this node in the ith dimension
     node /= nnode;
 
     double xi_A_dim = 2.*(node_dim/float(nnode-1))-1.; // xi of this node in the ith dimension
@@ -186,7 +184,7 @@ std::vector<double> FEM<dim>::basis_gradient(unsigned int node, ...){
     for( unsigned int B = 0; B < nnode ; B++ ){
       // Check for a hole in the lagrange interpolant's derivative in ith dimension
       if( node_dim != B ){
-        double xi_B = 2.*(B_dim/float(nnode-1))-1.; // xi of the local node B in ith dimension
+        double xi_B = 2.*(B/float(nnode-1))-1.; // xi of the local node B in ith dimension
         if(abs(xi-xi_B) <= 1e-8){
           if(hasHole)
             goto dimLoop;
@@ -202,7 +200,7 @@ std::vector<double> FEM<dim>::basis_gradient(unsigned int node, ...){
 
         // Skip the hole in the lagrange interpolant
         if( node_dim != B ){
-          double xi_B = 2.*(B_dim/float(nnode-1))-1.; // xi of the local node B in ith dimension
+          double xi_B = 2.*(B/float(nnode-1))-1.; // xi of the local node B in ith dimension
           // Skip the zero in the numerator!
           if( holeIdx != B )
             value *= (xi - xi_B);
@@ -219,7 +217,7 @@ std::vector<double> FEM<dim>::basis_gradient(unsigned int node, ...){
           double xi_B_dim = 2.*(B_dim/float(nnode-1))-1.; // xi of the local node B in ith dimension
           value *= (xi - xi_B_dim);
           value /= (xi_A_dim - xi_B_dim);
-          value2 += 1./(xi_A_dim-xi_B_dim);
+          value2 += 1./(xi-xi_B_dim);
         }
       }
       value *= value2;
@@ -228,7 +226,6 @@ std::vector<double> FEM<dim>::basis_gradient(unsigned int node, ...){
     values[i] = value;
   }
   va_end(args);
-
   return values;
 }
 
@@ -286,19 +283,19 @@ void FEM<dim>::define_boundary_conds(){
     for(unsigned int node = 0; node < totalNodes; node++){
       // Left BC
       if( nodeLocation[node][0] == x_min ){
-        boundary_values[node] = 100.+forcingFunction/(4.*kappahat)*nodeLocation[node][1]*nodeLocation[node][1];
+        boundary_values[node] = 100.+forcingFunction/(4.*kappabar)*nodeLocation[node][1]*nodeLocation[node][1];
       }
       // Right BC
       if( nodeLocation[node][0] == x_max ){
-        boundary_values[node] = 100.+forcingFunction/(4.*kappahat)*(nodeLocation[node][1]*nodeLocation[node][1] + 0.0009);
+        boundary_values[node] = 100.+forcingFunction/(4.*kappabar)*(nodeLocation[node][1]*nodeLocation[node][1] + 0.0009);
       }
       // Bottom BC
       if( nodeLocation[node][1] == y_min ){
-        boundary_values[node] = 100.+forcingFunction/(4.*kappahat)*(nodeLocation[node][0]*nodeLocation[node][0]);
+        boundary_values[node] = 100.+forcingFunction/(4.*kappabar)*(nodeLocation[node][0]*nodeLocation[node][0]);
       }
       // Top BC
       if( nodeLocation[node][1] == y_max ){
-        boundary_values[node] = 100.+forcingFunction/(4.*kappahat)*(nodeLocation[node][0]*nodeLocation[node][0] + 0.0064);
+        boundary_values[node] = 100.+forcingFunction/(4.*kappabar)*(nodeLocation[node][0]*nodeLocation[node][0] + 0.0064);
       }
     }
 	}
@@ -334,14 +331,16 @@ void FEM<dim>::setup_system(){
   D.reinit (dof_handler.n_dofs());
 
   //Define quadrature rule - again, you decide what quad rule is needed
-  quadRule = 2; //EDIT - Number of quadrature points along one dimension
+  quadRule = 3; //EDIT - Number of quadrature points along one dimension
   quad_points.resize(quadRule); quad_weight.resize(quadRule);
 
-  quad_points[0] = -sqrt(1./3.); //EDIT
-  quad_points[1] = sqrt(1./3.); //EDIT
+  quad_points[0] = 0.; //EDIT
+  quad_points[1] = -sqrt(3./5.); //EDIT
+  quad_points[2] = sqrt(3./5.); //EDIT
 
-  quad_weight[0] = 1.; //EDIT
-  quad_weight[1] = 1.; //EDIT
+  quad_weight[0] = 8./9.; //EDIT
+  quad_weight[1] = 5./9.; //EDIT
+  quad_weight[2] = 5./9.; //EDIT
 
   //Just some notes...
   std::cout << "   Number of active elems:       " << triangulation.n_active_cells() << std::endl;
@@ -387,7 +386,14 @@ void FEM<dim>::assemble_system(){
         detJ = Jacobian.determinant();
         for(unsigned int A=0; A<dofs_per_elem; A++){
           //EDIT - Define Flocal here.
-          Flocal[A] = 0.;
+          if( prob == 1 )
+            Flocal[A] = 0.;
+          else if( prob == 2 )
+            Flocal[A] += forcingFunction
+                      * basis_function(A,quad_points[q1],quad_points[q2])
+                      * detJ
+                      * quad_weight[q1]
+                      * quad_weight[q2];
         }
       }
     }
@@ -397,8 +403,8 @@ void FEM<dim>::assemble_system(){
 
     //"kappa" is the conductivity tensor
     kappa = 0.;
-    kappa[0][0] = kappahat;
-    kappa[1][1] = kappahat;
+    kappa[0][0] = kappabar;
+    kappa[1][1] = kappabar;
 
     //Loop over local DOFs and quadrature points to populate Klocal
     Klocal = 0.;
@@ -511,6 +517,14 @@ double FEM<dim>::l2norm_of_error(){
 				Jacobian = 0.;
 				/*EDIT - you'll need to find the determinant of the Jacobian to perform the
 				numerical integration (see, for example, Flocal or Klocal)*/
+        for(unsigned int i=0;i<dim;i++){
+          for(unsigned int j=0;j<dim;j++){
+            for(unsigned int A=0; A<dofs_per_elem; A++){
+              Jacobian[i][j] += nodeLocation[local_dof_indices[A]][i]*basis_gradient(A,quad_points[q1],quad_points[q2])[j];
+            }
+          }
+        }
+        detJ = Jacobian.determinant();
 				x = 0.; y = 0.; u_h = 0.;
 				for(unsigned int B=0; B<dofs_per_elem; B++){
 					x += nodeLocation[local_dof_indices[B]][0]*basis_function(B,quad_points[q1],quad_points[q2]);
@@ -521,12 +535,15 @@ double FEM<dim>::l2norm_of_error(){
             u_exact = 0; // Inexact!
           }
           else if( prob == 2){
-            u_exact = ( 100. + (forcingFunction/(4.*kappahat))*(x*x+y*y) );
+            u_exact = ( 100. + (forcingFunction/(4.*kappabar))*(x*x+y*y) );
           }
 				}
 		    //EDIT - Find the l2-norm of the error through numerical integration - for problem 2 only.
 		    /*This includes evaluating the exact solution at the quadrature points*/
-        l2norm += (u_h-u_exact)*(u_h-u_exact);
+        l2norm += (u_h-u_exact)*(u_h-u_exact)
+                * detJ
+                * quad_weight[q1]
+                * quad_weight[q2];
 			}
 		}
 	}

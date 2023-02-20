@@ -42,13 +42,9 @@ class FEM
 
   //Define your 2D basis functions and derivatives
   double basis_function(unsigned int node, 
-			double xi_1,
-			double xi_2,
-			double xi_3);
+			...);
   std::vector<double> basis_gradient(unsigned int node, 
-      double xi_1,
-      double xi_2,
-      double xi_3);
+      ...);
 
   //Solution steps
   void generate_mesh(std::vector<unsigned int> numberOfElements);
@@ -112,6 +108,7 @@ FEM<dim>::~FEM (){
 template <int dim>
 double FEM<dim>::basis_function(unsigned int node, ...){
   va_list args;
+  va_start(args,node);
   unsigned int nnode = 2; // Number of nodes / dim. Same as order+1
 
   // Doesn't work the same for constant basis functions.
@@ -120,7 +117,6 @@ double FEM<dim>::basis_function(unsigned int node, ...){
 
   double value = 1.; //Store the value of the basis function in this variable
   
-  va_start(args, double);
 
   for(unsigned int i=0; i<dim; i++){
     
@@ -141,7 +137,6 @@ double FEM<dim>::basis_function(unsigned int node, ...){
     }
   }
   va_end(args);
-
   return value;
 }
 
@@ -149,23 +144,22 @@ double FEM<dim>::basis_function(unsigned int node, ...){
 /*You need to calculate the value of the derivative of the specified basis function and order at the given quadrature pt.
   Note that this is the derivative with respect to xi (not x)*/
 template <int dim>
-std::vector<double> FEM<dim>::basis_gradient(unsigned int node, ...){
+std::vector<double> FEM<dim>::basis_gradient(unsigned int node ...){
 
   std::vector<double> values(dim,0.0); //Store the value of the gradient of the basis function in this variable
 
   va_list args;
+  va_start(args,node);
 
-  int nnode = 2; // Number of nodes / dim. Same as order+1
+  unsigned int nnode = 2; // Number of nodes / dim. Same as order+1
 
   // Doesn't work the same for constant basis functions.
   if(nnode == 1)
     return values;
-  
-  va_start(args, double);
 
   dimLoop:for(int i=0; i<dim; i++){
     
-    int node_dim = node%nnode; // number of this node in the ith dimension
+    unsigned int node_dim = node%nnode; // number of this node in the ith dimension
     node /= nnode;
 
     double xi_A_dim = 2.*(node_dim/float(nnode-1))-1.; // xi of this node in the ith dimension
@@ -181,7 +175,7 @@ std::vector<double> FEM<dim>::basis_gradient(unsigned int node, ...){
     for( unsigned int B = 0; B < nnode ; B++ ){
       // Check for a hole in the lagrange interpolant's derivative in ith dimension
       if( node_dim != B ){
-        double xi_B = 2.*(B_dim/float(nnode-1))-1.; // xi of the local node B in ith dimension
+        double xi_B = 2.*(B/float(nnode-1))-1.; // xi of the local node B in ith dimension
         if(abs(xi-xi_B) <= 1e-8){
           if(hasHole)
             goto dimLoop;
@@ -197,7 +191,7 @@ std::vector<double> FEM<dim>::basis_gradient(unsigned int node, ...){
 
         // Skip the hole in the lagrange interpolant
         if( node_dim != B ){
-          double xi_B = 2.*(B_dim/float(nnode-1))-1.; // xi of the local node B in ith dimension
+          double xi_B = 2.*(B/float(nnode-1))-1.; // xi of the local node B in ith dimension
           // Skip the zero in the numerator!
           if( holeIdx != B )
             value *= (xi - xi_B);
@@ -223,7 +217,6 @@ std::vector<double> FEM<dim>::basis_gradient(unsigned int node, ...){
     values[i] = value;
   }
   va_end(args);
-
   return values;
 }
 
